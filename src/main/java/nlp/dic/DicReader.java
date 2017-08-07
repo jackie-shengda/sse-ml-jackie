@@ -16,7 +16,7 @@ public class DicReader {
 
 	public static BufferedReader getReader(String name) throws FileNotFoundException {
 		// maven工程修改词典加载方式
-		InputStream in = new FileInputStream(new File("E:\\workspace\\sse-ml-jackie\\src\\main\\java\\resources\\"+name));
+		InputStream in = new FileInputStream(new File("./src/main/java/resources/"+name));
 		try {
 			return new BufferedReader(new InputStreamReader(in, "UTF-8"));
 		} catch (UnsupportedEncodingException e) {
