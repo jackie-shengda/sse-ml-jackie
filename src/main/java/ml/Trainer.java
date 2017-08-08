@@ -36,18 +36,19 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import scala.Tuple2;
 
+import java.io.Serializable;
 import java.util.*;
 
 /**
  * Created by Jackie.S on 2017/7/25.
  */
-public class Trainer {
+public class Trainer implements Serializable{
 
     private int VOCAB_SIZE = 512;
-    private int maxCorpusLength = 256;  //最大语料长度
+    private int maxCorpusLength = 65536;  //最大语料长度
     private int numLabel = 2;           //标签个数
     private int batchSize  = 10;        //批处理大小
-    private int totalEpoch = 10;     //样本训练次数
+    private int totalEpoch = 10;        //样本训练次数
 
     public void tainning() throws Exception {
         System.setProperty("hadoop.home.dir", "E:\\WorkSoft\\hadoop");
@@ -75,6 +76,8 @@ public class Trainer {
                 .setInputType(InputType.recurrent(VOCAB_SIZE))
                 .build();
 
+        ArrayList<String> stopWords = new ArrayList<>();
+        stopWords.add("\r\n");
         Map<String, Object> TokenizerVarMap = new HashMap<>();      //定义文本处理的各种属性
         TokenizerVarMap.put("numWords", 1);     //词最小出现次数
         TokenizerVarMap.put("nGrams", 1);       //language model parameter
@@ -112,8 +115,26 @@ public class Trainer {
         SparkUtils.writeObjectToFile(VocabLabelPath, saveVocabLabel, jsc);
 
         //转换为训练集
-        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = jsc.objectFile(VocabLabelPath);
+//        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = jsc.objectFile(VocabLabelPath);
 //        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = new JavaRDD<>();
+
+        // JavaRDD<String, List<VocabWord>>
+        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = javaRDDCorpusToken.map(new Function<List<String>, String>() {
+            @Override
+            public String call(List<String> strings) throws Exception {
+                return strings.get(0);
+            }
+        }).zip(javaRDDVocabCorpus).map(new Function<Tuple2<String, List<VocabWord>>, Tuple2<List<VocabWord>,VocabWord>>() {
+                                           @Override
+                                           public Tuple2<List<VocabWord>,VocabWord> call(Tuple2<String, List<VocabWord>> stringListTuple2) throws Exception {
+                                               String token = stringListTuple2._1();
+                                               VocabCache<VocabWord> vocabLabel1 = vocabLabel.getValue();
+                                               VocabWord word = vocabLabel1.wordFor(token);
+                                               return new Tuple2(stringListTuple2._2(),word);
+                                           }
+
+                                       }
+        );
 
 
         JavaRDD<DataSet> javaRDDTrainData = javaPairRDDVocabLabel.map(new Function<Tuple2<List<VocabWord>,VocabWord>, DataSet>() {
@@ -131,14 +152,20 @@ public class Trainer {
                 origin[0] = 0;                        //arr(0) store the index of batch sentence
                 mask[0] = 0;
                 int j = 0;
+//                System.out.println("**********  listWords size: " + listWords.size() + "    "+ listWords.get(0).getWord()+listWords.get(1).getWord());
+//                System.out.println("**********  labelWord:      " + labelWord.getWord());
                 for (VocabWord vw : listWords) {         //traverse the list which store an entire sentence
                     origin[2] = j;
+                    System.out.print(vw.getWord());
+//                    System.out.print("origin: "+origin[0]+" "+origin[1]+" "+origin[2]);
                     features.putScalar(origin, vw.getIndex());
                     //
                     mask[1] = j;
+//                    System.out.println("    mask: "+mask[0]+" "+mask[1]+"   word: "+vw.getWord());
                     featuresMask.putScalar(mask, 1.0);  //Word is present (not padding) for this example + time step -> 1.0 in features mask
                     ++j;
                 }
+                System.out.println();
                 //
                 int lastIdx = listWords.size();
                 int idx = labelWord.getIndex();

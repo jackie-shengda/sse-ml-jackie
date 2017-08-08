@@ -25,7 +25,7 @@ public class ChineseTokenizerTest {
     @Test
     public void testChineseTokenizer() throws IOException {
         BufferedReader br = new BufferedReader(new FileReader(new File("./src/main/java/resources/正面.txt")));
-        File target = new File("./src/main/java/resources/positive.txt");
+        File target = new File("./src/main/java/resources/positive_nospace.txt");
         if(!target.exists()){
             target.createNewFile();
         }
@@ -55,7 +55,7 @@ public class ChineseTokenizerTest {
     @Test
     public void negativeChineseTokenizer() throws IOException {
         BufferedReader br = new BufferedReader(new FileReader(new File("./src/main/java/resources/负面.txt")));
-        File target = new File("./src/main/java/resources/negative.txt");
+        File target = new File("./src/main/java/resources/negative_nospace.txt");
         if(!target.exists()){
             target.createNewFile();
         }
@@ -77,4 +77,17 @@ public class ChineseTokenizerTest {
         fw.flush();
         fw.close();
     }
+
+    @Test
+    public void findMaxlength() throws IOException {
+        BufferedReader br = new BufferedReader(new FileReader(new File("./src/main/java/resources/corpus2.txt")));
+        String lineStr = br.readLine();
+        int len=0;
+        while (lineStr!=null){
+            if(lineStr.length()>len) len=lineStr.length();
+            lineStr = br.readLine();
+        }
+        System.out.print(len);
+    }
+
 }
