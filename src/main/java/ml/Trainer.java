@@ -36,6 +36,8 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import scala.Tuple2;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.Serializable;
 import java.util.*;
 
@@ -44,17 +46,19 @@ import java.util.*;
  */
 public class Trainer implements Serializable{
 
-    private int VOCAB_SIZE = 512;
-    private int maxCorpusLength = 65536;  //最大语料长度
+    private int VOCAB_SIZE = 6000;
+    private int maxCorpusLength = 3800;  //最大语料长度
     private int numLabel = 2;           //标签个数
     private int batchSize  = 10;        //批处理大小
     private int totalEpoch = 10;        //样本训练次数
 
     public void tainning() throws Exception {
-        System.setProperty("hadoop.home.dir", "E:\\WorkSoft\\hadoop");
+        System.setProperty("hadoop.home.dir", "G:\\environment\\hadoop");
         SparkConf sparkConf = new SparkConf()
                 .setMaster("local[*]")
                 .set("spark.kryo.registrator","org.nd4j.Nd4jRegistrator")
+                .set("spark.executor.memory", "10g")
+                .set("spark.driver.memory","10g")
                 .setAppName("NLP Java Spark");
         JavaSparkContext jsc = new JavaSparkContext(sparkConf);
 
@@ -89,7 +93,7 @@ public class Trainer implements Serializable{
         Broadcast<Map<String, Object>>  broadcasTokenizerVarMap = jsc.broadcast(TokenizerVarMap);   //broadcast the parameter map
 
         //训练语料分词
-        JavaRDD<String> javaRDDCorpus = jsc.textFile("./src/main/java/resources/corpus.txt");
+        JavaRDD<String> javaRDDCorpus = jsc.textFile("./src/main/java/resources/corpus4_min.txt");
         TextPipeline textPipeLineCorpus = new TextPipeline(javaRDDCorpus, broadcasTokenizerVarMap);
         JavaRDD<List<String>> javaRDDCorpusToken = textPipeLineCorpus.tokenize();   //tokenize the corpus
         textPipeLineCorpus.buildVocabCache();                                       //build and get the vocabulary
@@ -118,10 +122,19 @@ public class Trainer implements Serializable{
 //        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = jsc.objectFile(VocabLabelPath);
 //        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = new JavaRDD<>();
 
+        File target = new File("./src/main/java/resources/test.txt");
+        if(!target.exists()){
+            target.createNewFile();
+        }
+        FileWriter fw = new FileWriter(target);
+
         // JavaRDD<String, List<VocabWord>>
         JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = javaRDDCorpusToken.map(new Function<List<String>, String>() {
             @Override
             public String call(List<String> strings) throws Exception {
+                if(strings.get(0).equals("是")){
+                    System.out.println(strings);
+                }
                 return strings.get(0);
             }
         }).zip(javaRDDVocabCorpus).map(new Function<Tuple2<String, List<VocabWord>>, Tuple2<List<VocabWord>,VocabWord>>() {
@@ -130,11 +143,16 @@ public class Trainer implements Serializable{
                                                String token = stringListTuple2._1();
                                                VocabCache<VocabWord> vocabLabel1 = vocabLabel.getValue();
                                                VocabWord word = vocabLabel1.wordFor(token);
+                                               if(!token.equals("正面") && !token.equals("负面")){
+                                                   System.out.println("******************     "+token);
+                                               }
                                                return new Tuple2(stringListTuple2._2(),word);
                                            }
 
                                        }
         );
+
+        javaPairRDDVocabLabel.collect();
 
 
         JavaRDD<DataSet> javaRDDTrainData = javaPairRDDVocabLabel.map(new Function<Tuple2<List<VocabWord>,VocabWord>, DataSet>() {
@@ -156,7 +174,7 @@ public class Trainer implements Serializable{
 //                System.out.println("**********  labelWord:      " + labelWord.getWord());
                 for (VocabWord vw : listWords) {         //traverse the list which store an entire sentence
                     origin[2] = j;
-                    System.out.print(vw.getWord());
+//                    System.out.print(vw.getWord());
 //                    System.out.print("origin: "+origin[0]+" "+origin[1]+" "+origin[2]);
                     features.putScalar(origin, vw.getIndex());
                     //
@@ -165,7 +183,7 @@ public class Trainer implements Serializable{
                     featuresMask.putScalar(mask, 1.0);  //Word is present (not padding) for this example + time step -> 1.0 in features mask
                     ++j;
                 }
-                System.out.println();
+//                System.out.println();
                 //
                 int lastIdx = listWords.size();
                 int idx = labelWord.getIndex();
