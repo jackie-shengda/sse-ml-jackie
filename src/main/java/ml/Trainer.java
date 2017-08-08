@@ -94,17 +94,26 @@ public class Trainer {
         Broadcast<VocabCache<VocabWord>> vocabCorpus = textPipeLineCorpus.getBroadCastVocabCache();
         JavaRDD<List<VocabWord>> javaRDDVocabCorpus = textPipeLineCorpus.getVocabWordListRDD(); //get tokenized corpus
 
-        //处理预料标签
+        //语料标签
         JavaRDD<String> javaRDDLabel = jsc.textFile("./src/main/java/resources/label.txt");
         TextPipeline textPipelineLabel = new TextPipeline(javaRDDLabel, broadcasTokenizerVarMap);   //broadcasTokenizerVarMap 需要视情况重新定义
+        JavaRDD<List<String>> javaRDDCorpusLabel = textPipeLineCorpus.tokenize();
         textPipelineLabel.buildVocabCache();
         textPipelineLabel.buildVocabWordListRDD();
         Broadcast<VocabCache<VocabWord>> vocabLabel = textPipelineLabel.getBroadCastVocabCache();
+        JavaRDD<List<VocabWord>> javaRDDVocabLabel = textPipelineLabel.getVocabWordListRDD();
 
+        /*---Finish Saving the Model------*/
+        String VocabCorpusPath = "./src/main/java/resources/courpus.dat";               //语料保存地址
+        String VocabLabelPath = "./src/main/java/resources/label.dat";                  //标签保存地址
+        VocabCache<VocabWord> saveVocabCorpus = vocabCorpus.getValue();
+        VocabCache<VocabWord> saveVocabLabel = vocabLabel.getValue();
+        SparkUtils.writeObjectToFile(VocabCorpusPath, saveVocabCorpus, jsc);
+        SparkUtils.writeObjectToFile(VocabLabelPath, saveVocabLabel, jsc);
 
-        //分类标签，即标注分词
-//        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = jsc.objectFile("./src/main/java/resources/courpus.txt");
-        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = jsc.objectFile("./src/main/java/resources/courpus.txt");
+        //转换为训练集
+        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = jsc.objectFile(VocabLabelPath);
+//        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = new JavaRDD<>();
 
 
         JavaRDD<DataSet> javaRDDTrainData = javaPairRDDVocabLabel.map(new Function<Tuple2<List<VocabWord>,VocabWord>, DataSet>() {
@@ -166,13 +175,7 @@ public class Trainer {
         FSDataOutputStream outputStream = hdfs.create(hdfsPath);
         ModelSerializer.writeModel(network, outputStream, true);
 
-/*---Finish Saving the Model------*/
-        String VocabCorpusPath = "";              //预料保存地址
-        String VocabLabelPath = "";               //标签保存地址
-        VocabCache<VocabWord> saveVocabCorpus = vocabCorpus.getValue();
-        VocabCache<VocabWord> saveVocabLabel = vocabLabel.getValue();
-        SparkUtils.writeObjectToFile(VocabCorpusPath, saveVocabCorpus, jsc);
-        SparkUtils.writeObjectToFile(VocabLabelPath, saveVocabLabel, jsc);
+
     }
 
 }
