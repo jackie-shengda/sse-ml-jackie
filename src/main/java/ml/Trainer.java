@@ -46,13 +46,14 @@ import java.util.*;
  */
 public class Trainer implements Serializable{
 
-    private int VOCAB_SIZE = 6000;
+    private int VOCAB_SIZE = 4800;
     private int maxCorpusLength = 3800;  //最大语料长度
     private int numLabel = 2;           //标签个数
-    private int batchSize  = 10;        //批处理大小
-    private int totalEpoch = 10;        //样本训练次数
+    private int batchSize  = 5;        //批处理大小
+    private int totalEpoch = 20;        //样本训练次数
 
     public void tainning() throws Exception {
+        System.out.println(Runtime.getRuntime().maxMemory());
         System.setProperty("hadoop.home.dir", "G:\\environment\\hadoop");
         SparkConf sparkConf = new SparkConf()
                 .setMaster("local[*]")
@@ -72,10 +73,10 @@ public class Trainer implements Serializable{
                 .l2(5 * 1e-4)
                 .updater(Updater.ADAM)
                 .list()
-                .layer(0, new EmbeddingLayer.Builder().nIn(VOCAB_SIZE).nOut(512).activation("identity").build())
-                .layer(1, new GravesLSTM.Builder().nIn(512).nOut(512).activation("softsign").build())
+                .layer(0, new EmbeddingLayer.Builder().nIn(VOCAB_SIZE).nOut(128).activation("identity").build())
+                .layer(1, new GravesLSTM.Builder().nIn(128).nOut(128).activation("softsign").build())
                 .layer(2, new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                        .activation("softmax").nIn(512).nOut(2).build())
+                        .activation("softmax").nIn(128).nOut(2).build())
                 .pretrain(false).backprop(true)
                 .setInputType(InputType.recurrent(VOCAB_SIZE))
                 .build();
