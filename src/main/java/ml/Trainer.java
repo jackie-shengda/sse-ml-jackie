@@ -27,7 +27,6 @@ import org.deeplearning4j.optimize.api.IterationListener;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.spark.impl.multilayer.SparkDl4jMultiLayer;
 import org.deeplearning4j.spark.impl.paramavg.ParameterAveragingTrainingMaster;
-import org.deeplearning4j.spark.util.SparkUtils;
 import org.deeplearning4j.text.tokenization.tokenizer.preprocessor.CommonPreprocessor;
 import org.deeplearning4j.util.ModelSerializer;
 import org.nd4j.linalg.api.ndarray.INDArray;
@@ -36,8 +35,6 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import scala.Tuple2;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.Serializable;
 import java.util.*;
 
@@ -47,16 +44,17 @@ import java.util.*;
 public class Trainer implements Serializable{
 
     private int VOCAB_SIZE = 4800;
-    private int maxCorpusLength = 3800;  //最大语料长度
+    private int maxCorpusLength = 2800;  //最大语料长度
     private int numLabel = 2;           //标签个数
     private int batchSize  = 5;        //批处理大小
-    private int totalEpoch = 20;        //样本训练次数
+    private int totalEpoch = 5;        //样本训练次数
 
     public void tainning() throws Exception {
         System.out.println(Runtime.getRuntime().maxMemory());
-        System.setProperty("hadoop.home.dir", "G:\\environment\\hadoop");
+        System.setProperty("hadoop.home.dir", "E:\\WorkSoft\\hadoop");
         SparkConf sparkConf = new SparkConf()
                 .setMaster("local[*]")
+                .set("spark.serializer","org.apache.spark.serializer.KryoSerializer")
                 .set("spark.kryo.registrator","org.nd4j.Nd4jRegistrator")
                 .set("spark.executor.memory", "10g")
                 .set("spark.driver.memory","10g")
@@ -82,7 +80,12 @@ public class Trainer implements Serializable{
                 .build();
 
         ArrayList<String> stopWords = new ArrayList<>();
-        stopWords.add("\r\n");
+        stopWords.add(",");
+        stopWords.add("是");
+        stopWords.add("的");
+        stopWords.add("我");
+        stopWords.add("就");
+        stopWords.add(" ");
         Map<String, Object> TokenizerVarMap = new HashMap<>();      //定义文本处理的各种属性
         TokenizerVarMap.put("numWords", 1);     //词最小出现次数
         TokenizerVarMap.put("nGrams", 1);       //language model parameter
@@ -90,7 +93,7 @@ public class Trainer implements Serializable{
         TokenizerVarMap.put("tokenPreprocessor", CommonPreprocessor.class.getName());
         TokenizerVarMap.put("useUnk", true);    //unlisted words will use usrUnk
         TokenizerVarMap.put("vectorsConfiguration", new VectorsConfiguration());
-        TokenizerVarMap.put("stopWords", new ArrayList<String>());  //stop words
+        TokenizerVarMap.put("stopWords", stopWords);  //stop words
         Broadcast<Map<String, Object>>  broadcasTokenizerVarMap = jsc.broadcast(TokenizerVarMap);   //broadcast the parameter map
 
         //训练语料分词
@@ -111,25 +114,7 @@ public class Trainer implements Serializable{
         Broadcast<VocabCache<VocabWord>> vocabLabel = textPipelineLabel.getBroadCastVocabCache();
         JavaRDD<List<VocabWord>> javaRDDVocabLabel = textPipelineLabel.getVocabWordListRDD();
 
-        /*---Finish Saving the Model------*/
-        String VocabCorpusPath = "./src/main/java/resources/courpus.dat";               //语料保存地址
-        String VocabLabelPath = "./src/main/java/resources/label.dat";                  //标签保存地址
-        VocabCache<VocabWord> saveVocabCorpus = vocabCorpus.getValue();
-        VocabCache<VocabWord> saveVocabLabel = vocabLabel.getValue();
-        SparkUtils.writeObjectToFile(VocabCorpusPath, saveVocabCorpus, jsc);
-        SparkUtils.writeObjectToFile(VocabLabelPath, saveVocabLabel, jsc);
-
         //转换为训练集
-//        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = jsc.objectFile(VocabLabelPath);
-//        JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = new JavaRDD<>();
-
-        File target = new File("./src/main/java/resources/test.txt");
-        if(!target.exists()){
-            target.createNewFile();
-        }
-        FileWriter fw = new FileWriter(target);
-
-        // JavaRDD<String, List<VocabWord>>
         JavaRDD<Tuple2<List<VocabWord>,VocabWord>> javaPairRDDVocabLabel = javaRDDCorpusToken.map(new Function<List<String>, String>() {
             @Override
             public String call(List<String> strings) throws Exception {
@@ -145,16 +130,13 @@ public class Trainer implements Serializable{
                                                VocabCache<VocabWord> vocabLabel1 = vocabLabel.getValue();
                                                VocabWord word = vocabLabel1.wordFor(token);
                                                if(!token.equals("正面") && !token.equals("负面")){
-                                                   System.out.println("******************     "+token);
+                                                   System.out.println("===========================================   ERROR：  "+token);
                                                }
                                                return new Tuple2(stringListTuple2._2(),word);
                                            }
 
                                        }
         );
-
-        javaPairRDDVocabLabel.collect();
-
 
         JavaRDD<DataSet> javaRDDTrainData = javaPairRDDVocabLabel.map(new Function<Tuple2<List<VocabWord>,VocabWord>, DataSet>() {
 
@@ -221,6 +203,13 @@ public class Trainer implements Serializable{
         FSDataOutputStream outputStream = hdfs.create(hdfsPath);
         ModelSerializer.writeModel(network, outputStream, true);
 
+         /*---Finish Saving the Model------*/
+//        String VocabCorpusPath = "./src/main/java/resources/courpus.dat";               //语料保存地址
+//        String VocabLabelPath = "./src/main/java/resources/label.dat";                   //标签保存地址
+//        VocabCache<VocabWord> saveVocabCorpus = vocabCorpus.getValue();
+//        VocabCache<VocabWord> saveVocabLabel = vocabLabel.getValue();
+//        SparkUtils.writeObjectToFile(VocabCorpusPath, saveVocabCorpus, jsc);
+//        SparkUtils.writeObjectToFile(VocabLabelPath, saveVocabLabel, jsc);
 
     }
 
