@@ -47,11 +47,14 @@ public class Trainer implements Serializable{
     private int maxCorpusLength = 2800;  //最大语料长度
     private int numLabel = 2;           //标签个数
     private int batchSize  = 5;        //批处理大小
-    private int totalEpoch = 5;        //样本训练次数
+    private int totalEpoch = 10;        //样本训练次数
 
     public void tainning() throws Exception {
         System.out.println(Runtime.getRuntime().maxMemory());
-        System.setProperty("hadoop.home.dir", "E:\\WorkSoft\\hadoop");
+//        System.setProperty("hadoop.home.dir", "G:\\environment\\hadoop");
+
+//        Configuration hadoopConf = new Configuration();
+//        hadoopConf.set("fs.hdfs.impl",org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
         SparkConf sparkConf = new SparkConf()
                 .setMaster("local[*]")
                 .set("spark.serializer","org.apache.spark.serializer.KryoSerializer")
@@ -60,21 +63,22 @@ public class Trainer implements Serializable{
                 .set("spark.driver.memory","10g")
                 .setAppName("NLP Java Spark");
         JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+        jsc.hadoopConfiguration().set("fs.hdfs.impl",org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
 
         MultiLayerConfiguration netconf = new NeuralNetConfiguration.Builder()
                 .seed(1234)
                 .iterations(1)
-                .learningRate(0.1)
+                .learningRate(0.01)
                 .learningRateScoreBasedDecayRate(0.5)
                 .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
                 .regularization(true)
                 .l2(5 * 1e-4)
                 .updater(Updater.ADAM)
                 .list()
-                .layer(0, new EmbeddingLayer.Builder().nIn(VOCAB_SIZE).nOut(128).activation("identity").build())
-                .layer(1, new GravesLSTM.Builder().nIn(128).nOut(128).activation("softsign").build())
+                .layer(0, new EmbeddingLayer.Builder().nIn(VOCAB_SIZE).nOut(256).activation("identity").build())
+                .layer(1, new GravesLSTM.Builder().nIn(256).nOut(256).activation("softsign").build())
                 .layer(2, new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                        .activation("softmax").nIn(128).nOut(2).build())
+                        .activation("softmax").nIn(256).nOut(2).build())
                 .pretrain(false).backprop(true)
                 .setInputType(InputType.recurrent(VOCAB_SIZE))
                 .build();
@@ -97,7 +101,7 @@ public class Trainer implements Serializable{
         Broadcast<Map<String, Object>>  broadcasTokenizerVarMap = jsc.broadcast(TokenizerVarMap);   //broadcast the parameter map
 
         //训练语料分词
-        JavaRDD<String> javaRDDCorpus = jsc.textFile("./src/main/java/resources/corpus4_min.txt");
+        JavaRDD<String> javaRDDCorpus = jsc.textFile("hdfs://localhost:9000/nlp-data/corpus4_min.txt");
         TextPipeline textPipeLineCorpus = new TextPipeline(javaRDDCorpus, broadcasTokenizerVarMap);
         JavaRDD<List<String>> javaRDDCorpusToken = textPipeLineCorpus.tokenize();   //tokenize the corpus
         textPipeLineCorpus.buildVocabCache();                                       //build and get the vocabulary
@@ -106,7 +110,7 @@ public class Trainer implements Serializable{
         JavaRDD<List<VocabWord>> javaRDDVocabCorpus = textPipeLineCorpus.getVocabWordListRDD(); //get tokenized corpus
 
         //语料标签
-        JavaRDD<String> javaRDDLabel = jsc.textFile("./src/main/java/resources/label.txt");
+        JavaRDD<String> javaRDDLabel = jsc.textFile("hdfs://localhost:9000/nlp-data/label.txt");
         TextPipeline textPipelineLabel = new TextPipeline(javaRDDLabel, broadcasTokenizerVarMap);   //broadcasTokenizerVarMap 需要视情况重新定义
         JavaRDD<List<String>> javaRDDCorpusLabel = textPipeLineCorpus.tokenize();
         textPipelineLabel.buildVocabCache();
@@ -196,7 +200,7 @@ public class Trainer implements Serializable{
 //
         MultiLayerNetwork network = sparknet.getNetwork();
         FileSystem hdfs = FileSystem.get(jsc.hadoopConfiguration());
-        Path hdfsPath = new Path("./src/main/java/resources/training.model");
+        Path hdfsPath = new Path("hdfs://localhost:9000/nlp-data/training.model");
         if( hdfs.exists(hdfsPath) ){
             hdfs.delete(hdfsPath, true);
         }
