@@ -90,4 +90,36 @@ public class ChineseTokenizerTest {
         System.out.print(len);
     }
 
+    @Test
+    public void dealWithCorpus() throws IOException {
+        BufferedReader br = new BufferedReader(new FileReader(new File("./src/main/java/resources/正面.txt")));
+        BufferedReader br2 = new BufferedReader(new FileReader(new File("./src/main/java/resources/负面.txt")));
+        File target = new File("./src/main/java/resources/corpus5.txt");
+        if(!target.exists()){
+            target.createNewFile();
+        }
+        FileWriter fw = new FileWriter(target);
+        TokenizerFactory tokenizerFactory = new ChineseTokenizerFactory();
+        String lineStr = br.readLine();
+        String lineStr2 = br2.readLine();
+        while (lineStr!=null){
+            if(lineStr.length()>30 && lineStr.length()<60){
+                fw.write("正面 ");
+                fw.write(lineStr);
+                fw.write("\r\n");
+            }
+            lineStr = br.readLine();
+        }
+        while (lineStr2!=null){
+            if(lineStr2.length()>30 && lineStr2.length()<60){
+                fw.write("负面 ");
+                fw.write(lineStr2);
+                fw.write("\r\n");
+            }
+            lineStr2 = br2.readLine();
+        }
+        fw.flush();
+        fw.close();
+    }
+
 }

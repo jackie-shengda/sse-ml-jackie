@@ -2,9 +2,6 @@ package ml;
 
 import ml.text.functions.TextPipeline;
 import nlp.tokenizations.tokenizerFactory.ChineseTokenizerFactory;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -35,6 +32,7 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import scala.Tuple2;
 
+import java.io.File;
 import java.io.Serializable;
 import java.util.*;
 
@@ -43,11 +41,11 @@ import java.util.*;
  */
 public class Trainer implements Serializable{
 
-    private int VOCAB_SIZE = 4800;
-    private int maxCorpusLength = 2800;  //最大语料长度
+    private int VOCAB_SIZE = 15000;
+    private int maxCorpusLength = 64;  //最大语料长度
     private int numLabel = 2;           //标签个数
-    private int batchSize  = 5;        //批处理大小
-    private int totalEpoch = 10;        //样本训练次数
+    private int batchSize  = 30;        //批处理大小
+    private int totalEpoch = 1;        //样本训练次数
 
     public void tainning() throws Exception {
         System.out.println(Runtime.getRuntime().maxMemory());
@@ -66,7 +64,7 @@ public class Trainer implements Serializable{
         jsc.hadoopConfiguration().set("fs.hdfs.impl",org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
 
         MultiLayerConfiguration netconf = new NeuralNetConfiguration.Builder()
-                .seed(1234)
+                .seed(123)
                 .iterations(1)
                 .learningRate(0.01)
                 .learningRateScoreBasedDecayRate(0.5)
@@ -89,7 +87,6 @@ public class Trainer implements Serializable{
         stopWords.add("的");
         stopWords.add("我");
         stopWords.add("就");
-        stopWords.add(" ");
         Map<String, Object> TokenizerVarMap = new HashMap<>();      //定义文本处理的各种属性
         TokenizerVarMap.put("numWords", 1);     //词最小出现次数
         TokenizerVarMap.put("nGrams", 1);       //language model parameter
@@ -101,7 +98,7 @@ public class Trainer implements Serializable{
         Broadcast<Map<String, Object>>  broadcasTokenizerVarMap = jsc.broadcast(TokenizerVarMap);   //broadcast the parameter map
 
         //训练语料分词
-        JavaRDD<String> javaRDDCorpus = jsc.textFile("hdfs://localhost:9000/nlp-data/corpus4_min.txt");
+        JavaRDD<String> javaRDDCorpus = jsc.textFile("./src/main/java/resources/corpus5.txt");
         TextPipeline textPipeLineCorpus = new TextPipeline(javaRDDCorpus, broadcasTokenizerVarMap);
         JavaRDD<List<String>> javaRDDCorpusToken = textPipeLineCorpus.tokenize();   //tokenize the corpus
         textPipeLineCorpus.buildVocabCache();                                       //build and get the vocabulary
@@ -110,7 +107,7 @@ public class Trainer implements Serializable{
         JavaRDD<List<VocabWord>> javaRDDVocabCorpus = textPipeLineCorpus.getVocabWordListRDD(); //get tokenized corpus
 
         //语料标签
-        JavaRDD<String> javaRDDLabel = jsc.textFile("hdfs://localhost:9000/nlp-data/label.txt");
+        JavaRDD<String> javaRDDLabel = jsc.textFile("./src/main/java/resources/label.txt");
         TextPipeline textPipelineLabel = new TextPipeline(javaRDDLabel, broadcasTokenizerVarMap);   //broadcasTokenizerVarMap 需要视情况重新定义
         JavaRDD<List<String>> javaRDDCorpusLabel = textPipeLineCorpus.tokenize();
         textPipelineLabel.buildVocabCache();
@@ -157,11 +154,11 @@ public class Trainer implements Serializable{
                 origin[0] = 0;                        //arr(0) store the index of batch sentence
                 mask[0] = 0;
                 int j = 0;
-//                System.out.println("**********  listWords size: " + listWords.size() + "    "+ listWords.get(0).getWord()+listWords.get(1).getWord());
+//                System.out.print("**********  listWords size: " + listWords.size() + "    "+ listWords.get(0).getWord()+listWords.get(1).getWord());
 //                System.out.println("**********  labelWord:      " + labelWord.getWord());
                 for (VocabWord vw : listWords) {         //traverse the list which store an entire sentence
                     origin[2] = j;
-//                    System.out.print(vw.getWord());
+//                    System.out.print(vw.getWord()+" ");
 //                    System.out.print("origin: "+origin[0]+" "+origin[1]+" "+origin[2]);
                     features.putScalar(origin, vw.getIndex());
                     //
@@ -188,6 +185,21 @@ public class Trainer implements Serializable{
                 .build();
         SparkDl4jMultiLayer sparknet = new SparkDl4jMultiLayer(jsc, netconf, trainMaster);
         sparknet.setListeners(Collections.<IterationListener>singletonList(new ScoreIterationListener(1)));
+/*
+
+        //初始化用户界面后端
+        UIServer uiServer = UIServer.getInstance();
+
+        //设置网络信息（随时间变化的梯度、分值等）的存储位置。这里将其存储于内存。
+        StatsStorage statsStorage = new InMemoryStatsStorage();         //或者： new FileStatsStorage(File)，用于后续的保存和载入
+
+        //将StatsStorage实例连接至用户界面，让StatsStorage的内容能够被可视化
+        uiServer.attach(statsStorage);
+
+        //然后添加StatsListener来在网络定型时收集这些信息
+        sparknet.setListeners(new StatsListener(statsStorage));
+*/
+
         for( int numEpoch = 0; numEpoch < totalEpoch; ++numEpoch){
             sparknet.fit(javaRDDTrainData);
             Evaluation evaluation = sparknet.evaluate(javaRDDTrainData);
@@ -199,13 +211,14 @@ public class Trainer implements Serializable{
         }
 //
         MultiLayerNetwork network = sparknet.getNetwork();
-        FileSystem hdfs = FileSystem.get(jsc.hadoopConfiguration());
-        Path hdfsPath = new Path("hdfs://localhost:9000/nlp-data/training.model");
+       /* FileSystem hdfs = FileSystem.get(jsc.hadoopConfiguration());
+        Path hdfsPath = new Path("./src/main/java/resources/trainingModel.zip");
         if( hdfs.exists(hdfsPath) ){
             hdfs.delete(hdfsPath, true);
-        }
-        FSDataOutputStream outputStream = hdfs.create(hdfsPath);
-        ModelSerializer.writeModel(network, outputStream, true);
+        }*/
+        File out = new File("./src/main/java/resources/trainingModel.zip");
+//        FSDataOutputStream outputStream = hdfs.create(hdfsPath);
+        ModelSerializer.writeModel(network, out, true);
 
          /*---Finish Saving the Model------*/
 //        String VocabCorpusPath = "./src/main/java/resources/courpus.dat";               //语料保存地址
