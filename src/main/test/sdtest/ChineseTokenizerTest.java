@@ -103,7 +103,7 @@ public class ChineseTokenizerTest {
         String lineStr = br.readLine();
         String lineStr2 = br2.readLine();
         while (lineStr!=null){
-            if(lineStr.length()>30 && lineStr.length()<60){
+            if(lineStr.length()>10 && lineStr.length()<50){
                 fw.write("正面 ");
                 fw.write(lineStr);
                 fw.write("\r\n");
@@ -111,7 +111,7 @@ public class ChineseTokenizerTest {
             lineStr = br.readLine();
         }
         while (lineStr2!=null){
-            if(lineStr2.length()>30 && lineStr2.length()<60){
+            if(lineStr2.length()>10 && lineStr2.length()<50){
                 fw.write("负面 ");
                 fw.write(lineStr2);
                 fw.write("\r\n");
@@ -122,4 +122,17 @@ public class ChineseTokenizerTest {
         fw.close();
     }
 
+    @Test
+    public void dealWithIssue() throws IOException {
+        BufferedReader br = new BufferedReader(new FileReader(new File("./src/main/java/resources/issue/issues.txt")));
+        String lineStr = br.readLine();
+        int l = lineStr.length();
+        while (lineStr!=null){
+            if(lineStr.length()>l){
+                l=lineStr.length();
+            }
+            lineStr = br.readLine();
+        }
+        System.out.println(l);
+    }
 }
