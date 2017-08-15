@@ -44,7 +44,7 @@ public class Trainer implements Serializable{
     private int VOCAB_SIZE = 16000;
     private int maxCorpusLength = 64;  //最大语料长度
     private int numLabel = 2;           //标签个数
-    private int batchSize  = 45;        //批处理大小
+    private int batchSize  = 35;        //批处理大小
     private int totalEpoch = 20;        //样本训练次数
 
     public void tainning() throws Exception {
@@ -69,7 +69,7 @@ public class Trainer implements Serializable{
                 .iterations(1)
                 .learningRate(0.01)
                 .learningRateScoreBasedDecayRate(0.5)
-                .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
+                .optimizationAlgo(OptimizationAlgorithm.LINE_GRADIENT_DESCENT)
                 .regularization(true)
                 .l2(5 * 1e-4)
                 .updater(Updater.ADAM)
@@ -84,10 +84,15 @@ public class Trainer implements Serializable{
 
         ArrayList<String> stopWords = new ArrayList<>();
         stopWords.add(",");
+        stopWords.add("。");
+        stopWords.add("；");
+        stopWords.add("！");
+        stopWords.add("很");
         stopWords.add("是");
         stopWords.add("的");
         stopWords.add("我");
         stopWords.add("就");
+//        stopWords.add("这本书");
 //        stopWords.add("【");
 //        stopWords.add("】");
         Map<String, Object> TokenizerVarMap = new HashMap<>();      //定义文本处理的各种属性
@@ -135,9 +140,9 @@ public class Trainer implements Serializable{
                                                String token = stringListTuple2._1();
                                                VocabCache<VocabWord> vocabLabel1 = vocabLabel.getValue();
                                                VocabWord word = vocabLabel1.wordFor(token);
-//                                               if(!token.equals("正面") && !token.equals("负面")){
-//                                                   System.out.println("===========================================   ERROR：  "+token);
-//                                               }
+                                               if(!token.equals("正面") && !token.equals("负面")){
+                                                   System.out.println("===========================================   ERROR：  "+token);
+                                               }
                                                return new Tuple2(stringListTuple2._2().subList(1,stringListTuple2._2.size()),word);
                                            }
 
@@ -216,6 +221,9 @@ public class Trainer implements Serializable{
             System.out.println("Accuracy: " + accuracy);
             System.out.println("====================================================================");
             MultiLayerNetwork network = sparknet.getNetwork();
+            if(accuracy>0.95){
+                break;
+            }
             File out = new File("./src/main/java/resources/trainingModel.zip");
             ModelSerializer.writeModel(network, out, true);
         }

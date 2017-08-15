@@ -67,7 +67,7 @@ public class issueModelTest {
 
 
         //获取训练数据
-        JavaRDD<String> javaRDDCorpus = jsc.textFile("./src/main/java/resources/issue/issues.txt");
+        JavaRDD<String> javaRDDCorpus = jsc.textFile("./src/main/java/resources/issue/testData.txt");
         TextPipeline textPipeLineCorpus = new TextPipeline(javaRDDCorpus, broadcasTokenizerVarMap);
         JavaRDD<List<String>> javaRDDCorpusToken = textPipeLineCorpus.tokenize();   //tokenize the corpus
         textPipeLineCorpus.buildVocabCache();                                       //build and get the vocabulary
@@ -153,8 +153,8 @@ public class issueModelTest {
         List<String> labelList  = new ArrayList<>();
         labelList.add("新公司业务管理系统_内部");
         labelList.add("新基金业务管理系统_内部");
-        labelList.add("期权风控");
         labelList.add("ezei重构");
+        labelList.add("期权风控");
         labelList.add("竞价交易平台");
         Evaluation eval  = sparknet.evaluate(javaRDDTrainData, labelList);
         System.out.println(eval.stats());
