@@ -65,18 +65,18 @@ public class Trainer implements Serializable{
         jsc.hadoopConfiguration().set("fs.hdfs.impl",org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
 
         MultiLayerConfiguration netconf = new NeuralNetConfiguration.Builder()
-                .seed(1234)
-                .iterations(1)
-                .learningRate(0.01)
+                .seed(1234)             //随机数
+                .iterations(1)          //迭代次数
+                .learningRate(0.01)     //学习率
                 .learningRateScoreBasedDecayRate(0.5)
-                .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-                .regularization(true)
-                .l2(5 * 1e-4)
-                .updater(Updater.ADAM)
+                .optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)    //算法-SGD
+                .regularization(true)   //正则化
+                .l2(5 * 1e-4)           //假设参数符合高斯分布，防止过拟合
+                .updater(Updater.ADAM)  //更新机制
                 .list()
-                .layer(0, new EmbeddingLayer.Builder().nIn(VOCAB_SIZE).nOut(256).activation("identity").build())
-                .layer(1, new GravesLSTM.Builder().nIn(256).nOut(256).activation("softsign").build())
-                .layer(2, new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
+                .layer(0, new EmbeddingLayer.Builder().nIn(VOCAB_SIZE).nOut(256).activation("identity").build())    //嵌入层
+                .layer(1, new GravesLSTM.Builder().nIn(256).nOut(256).activation("softsign").build())   //LSTM层
+                .layer(2, new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)     //循环神经网络
                         .activation("softmax").nIn(256).nOut(2).build())
                 .pretrain(false).backprop(true)
                 .setInputType(InputType.recurrent(VOCAB_SIZE))
